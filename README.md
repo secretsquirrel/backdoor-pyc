@@ -3,6 +3,12 @@
 Replace pyc files with malicious pyc files.
 
 
+## Change Log
+
+####11/10/2015
+* No more writing to tmp, just edit the pyc file directly
+* Bug fixes 
+
 ## Prior work
 
 
